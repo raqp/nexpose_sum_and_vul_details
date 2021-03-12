@@ -147,7 +147,7 @@ class ExecutiveSummary:
                         if run.text in self.mapper:
                             run.text = self.mapper[run.text]
                             self.set_object_color(run, self.default_color)
-            if index == 1:
+            if index == 1 and self.input_document_type != 'vul':
                 borders.append('bottom')
             self.set_table_styling(table, *borders)
 

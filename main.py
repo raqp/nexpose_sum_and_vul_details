@@ -2,7 +2,7 @@ import os
 import yaml
 import platform
 from sys import argv
-from handlers.new_ import ExecutiveSummary
+from handlers.nexpose_sum_and_vul_detail import ExecutiveSummary
 
 
 def config_loader():
