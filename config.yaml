@@ -1,0 +1,43 @@
+executive_summary:
+  font_name: Arial
+  p_18_font_size: 18
+  p_12_font_size: 13.5
+  p_10_font_size: 9
+  p_10_font_color:
+    - 0
+    - 173
+    - 198
+  table_header_font_size: 8
+  table_content_font_size: 10
+  page_height: 210
+  page_width: 297
+  default_color:
+    - 79
+    - 45
+    - 127
+  table_header_color:
+    - 0
+    - 167
+    - 181
+
+vulnerability:
+  font_name: Arial
+  p_18_font_size: 36
+  p_12_font_size: 13
+  p_10_font_size: 9
+  p_10_font_color:
+    - 117
+    - 165
+    - 32
+  table_header_font_size: 9
+  table_content_font_size: 9
+  page_height: 210
+  page_width: 297
+  default_color:
+    - 91
+    - 155
+    - 213
+  table_header_color:
+    - 91
+    - 155
+    - 213
