@@ -47,8 +47,10 @@ class ExecutiveSummary:
         # self.document = Document(r'C:\Users\Acer\Desktop\work\nexpose_vulnerability\NExpose\nes.docx')
         self.document = Document(source_file)
         self.destination_path = destination_path
-        if os_platform == 'windows' and not self.destination_path.endswith('\\'):
-            self.destination_path += '\\'
+        self.slash = "/"
+        if os_platform == 'windows':
+            self.slash = "\\"
+        self.destination = destination_path if destination_path.endswith(self.slash) else destination_path + self.slash
         self.file_name = f'report_{datetime.now().strftime("%d-%b-%Y-%H-%M")}.docx'
         self.paragraphs = self.document.paragraphs
         self.tables = self.document.tables
