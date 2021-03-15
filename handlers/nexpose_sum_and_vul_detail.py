@@ -258,7 +258,7 @@ class ExecutiveSummary:
         tc = cell._tc
         tbl_cell_properties = tc.get_or_add_tcPr()
         cl_shading = OxmlElement('w:shd')
-        cl_shading.set(qn('w:fill'), "00000")
+        cl_shading.set(qn('w:fill'), "ffffff")
         tbl_cell_properties.append(cl_shading)
         return cell
 
