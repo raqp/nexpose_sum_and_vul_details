@@ -70,7 +70,7 @@ class ExecutiveSummary:
         self.table_content_font_size = config['table_content_font_size']
         self.severity_level = ''
         self.cvss_v2_score = ''
-        self.cve_numbers = ''
+        self.cve_numbers = 'N/A'
 
     def start(self):
         self.set_font_name()
@@ -79,6 +79,9 @@ class ExecutiveSummary:
             self.add_cells()
         self.change_tables()
         self.delete_unuseful_tables()
+        if self.input_document_type == 'vul':
+            self.set_table_cell_text()
+        self.set_all_tables_backgrounds()
         self.save_document()
 
     def set_font_name(self):
@@ -134,9 +137,13 @@ class ExecutiveSummary:
                     if block.style.font.size == Pt(18):
                         if self.input_document_type == 'vul':
                             block.text = self.format_paragraph_text(block.text)
+                        if 'IP Address' in block.text:
+                            block.text = block.text[:block.text.index('IP')] + 'Component'
                         color = self.default_color
                         font_size = self.p_18_font_size
                     elif block.style.font.size == Pt(12):
+                        if 'IP Address' in block.text:
+                            block.text = block.text[:block.text.index('IP')] + 'Component'
                         color = self.default_color
                         font_size = self.p_12_font_size
                     elif block.style.font.size == Pt(10):
@@ -144,6 +151,19 @@ class ExecutiveSummary:
                         font_size = self.p_10_font_size
                     self.set_object_color(block.runs[0], color)
                     self.set_paragraph_font_size(block.runs[0], font_size)
+
+    def set_table_cell_text(self):
+        for table in self.tables:
+            if len(table.rows[0].cells) > 2:
+                if table.rows[0].cells[-1].text == 'Component':
+                    severity_level = table.rows[1].cells[3].text
+                    cve_number = table.rows[1].cells[4].text
+                    cvss_score = table.rows[1].cells[2].text
+                    if len(table.rows) > 2:
+                        for row in table.rows[2:]:
+                            row.cells[3].paragraphs[0].add_run().text = severity_level
+                            row.cells[4].paragraphs[0].add_run().text = cve_number
+                            row.cells[2].paragraphs[0].add_run().text = cvss_score
 
     @staticmethod
     def format_paragraph_text(item):
@@ -157,6 +177,7 @@ class ExecutiveSummary:
         style = None
         for index, table in enumerate(self.tables):
             borders = ['left', 'right', 'top']
+            special = False
             for cell in table.rows[0].cells:
                 self.set_table_header_bg_color(cell)
                 for ind, paragraph in enumerate(cell.paragraphs):
@@ -169,9 +190,11 @@ class ExecutiveSummary:
                         self.set_paragraph_font_size(run, 9, bold=False)
                         if index != 2:
                             self.set_object_color(run, self.default_color)
+            if 'Scan Customer Company' in table.rows[0].cells[0].text:
+                special = True
             if index == 2 and self.input_document_type != 'vul':
                 borders.append('bottom')
-            self.set_table_styling(table, *borders)
+            self.set_table_styling(table, *borders, special=special)
 
     def add_cells(self):
         previous_text = ""
@@ -197,7 +220,7 @@ class ExecutiveSummary:
                             elif previous_text == 'CVSSv2 Score':
                                 self.cvss_v2_score = current_text[:current_text.index(' ')]
                             elif previous_text == 'References':
-                                self.cve_numbers = cve
+                                self.cve_numbers = cve if cve else 'N/A'
                             elif run.text.startswith('IP Address'):
                                 instance = self.tables[index].rows[1].cells[2].paragraphs[0].text
                                 if instance:
@@ -240,6 +263,9 @@ class ExecutiveSummary:
                 table.add_column(Inches(1.0))
                 if i < 3:
                     self.add_info_into_table(table, headers[i], headers_content[headers[i]])
+        self.cve_numbers = 'N/A'
+        self.cvss_v2_score = ''
+        self.severity_level = ''
 
     def add_info_into_table(self, table, header, info=None):
         table.rows[0].cells[-1].paragraphs[0].add_run().text = header
@@ -256,7 +282,7 @@ class ExecutiveSummary:
         wt_list = re.findall('<w:t>C[\S\s]*?</w:t>', xml_str)
         if wt_list:
             wt_list = [item[item.find('>') + 1: item.rfind('<')] for item in wt_list]
-            result = '\n'.join([item for item in wt_list if item.startswith('CVE')])
+            result = ', '.join([item for item in wt_list if item.startswith('CVE')])
         return result
 
     @staticmethod
@@ -268,8 +294,17 @@ class ExecutiveSummary:
         tbl_cell_properties.append(cl_shading)
         return cell
 
+    def set_all_tables_backgrounds(self):
+        for table in self.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    self.set_table_header_bg_color(cell)
+                    for paragraph in cell.paragraphs:
+                        for run in paragraph.runs:
+                            self.set_paragraph_font_size(run, self.table_content_font_size)
+
     @staticmethod
-    def set_table_styling(table, *args):
+    def set_table_styling(table, *args, special=False):
         tbl = table._tbl
         cell_number = 0
         coll_count = len(table.columns)
@@ -289,8 +324,11 @@ class ExecutiveSummary:
                     cell_number += 1
                     side.set(qn("w:color"), "4f2d7f")
                 else:
-                    side.set(qn("w:sz"), "5")
-                    side.set(qn("w:color"), "b5b5b5")
+                    if special:
+                        side.set(qn("w:color"), "ffffff")
+                    else:
+                        side.set(qn("w:sz"), "5")
+                        side.set(qn("w:color"), "b5b5b5")
                 tc_borders.append(side)
             tc_pr.append(tc_borders)
 
