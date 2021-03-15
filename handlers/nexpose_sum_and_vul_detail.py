@@ -8,6 +8,9 @@ from docx.text.paragraph import Paragraph
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from datetime import datetime
+from docx.enum.table import WD_TABLE_DIRECTION
+from docx.shared import Inches
+import re
 
 
 class ExecutiveSummary:
@@ -41,7 +44,7 @@ class ExecutiveSummary:
                 'Compliance Status': 'Compliance Status',
                 'Exceptions, False Positives, or Compensating Controls Noted by the ASV for this Vulnerability':
                     'Details',
-                'Instance': 'Instance'
+                'Instance': ''
             }
         self.input_document_type = input_document_type
         # self.document = Document(r'C:\Users\Acer\Desktop\work\nexpose_vulnerability\NExpose\nes.docx')
@@ -65,11 +68,16 @@ class ExecutiveSummary:
         self.p_10_font_color = config['p_10_font_color']
         self.table_header_color = config['table_header_color']
         self.table_content_font_size = config['table_content_font_size']
+        self.severity_level = ''
+        self.cvss_v2_score = ''
+        self.cve_numbers = ''
 
     def start(self):
         self.iterate()
-        self.delete_useful_tables()
+        if self.input_document_type == 'vul':
+            self.add_cells()
         self.change_tables()
+        self.delete_unuseful_tables()
         self.save_document()
 
     @staticmethod
@@ -88,9 +96,10 @@ class ExecutiveSummary:
             elif isinstance(child, CT_Tbl):
                 yield Table(child, parent)
 
-    def delete_useful_tables(self):
+    def delete_unuseful_tables(self):
         for active_table in self.tables:
-            if active_table.cell(0, 0).paragraphs[0].text == '':
+            if active_table.cell(0, 0).paragraphs[0].text == '' or \
+                    active_table.cell(0, 0).paragraphs[0].text.startswith('1 Scan'):
                 active_table._element.getparent().remove(active_table._element)
 
     @staticmethod
@@ -101,7 +110,7 @@ class ExecutiveSummary:
     @staticmethod
     def set_paragraph_font_size(run, font_size, bold=None):
         run.font.size = Pt(font_size)
-        if bold is None:
+        if bold is not None:
             run.bold = bold
 
     def iterate(self):
@@ -109,8 +118,9 @@ class ExecutiveSummary:
             if isinstance(block, Paragraph):
                 font_size = 9
                 color = None
-                bold = None
-                if block.text.startswith('Part 2a') or block.text.startswith('2'):
+
+                if block.text.startswith('Part 2a') or block.text.startswith(
+                        '2') or 'table of contents' in block.text.lower():
                     block.text = ''
                 elif block.text.startswith('Part 2b'):
                     index = block.text.index('.')
@@ -122,6 +132,7 @@ class ExecutiveSummary:
                             block.text = self.format_paragraph_text(block.text)
                         color = self.default_color
                         font_size = self.p_18_font_size
+
                     elif block.style.font.size == Pt(12):
                         color = self.default_color
                         font_size = self.p_12_font_size
@@ -129,7 +140,7 @@ class ExecutiveSummary:
                         color = self.p_10_font_color
                         font_size = self.p_10_font_size
                     self.set_object_color(block.runs[0], color)
-                    self.set_paragraph_font_size(block.runs[0], font_size, bold)
+                    self.set_paragraph_font_size(block.runs[0], font_size)
 
     @staticmethod
     def format_paragraph_text(item):
@@ -140,25 +151,114 @@ class ExecutiveSummary:
         return text
 
     def change_tables(self):
+        style = None
         for index, table in enumerate(self.tables):
             borders = ['left', 'right', 'top']
             for cell in table.rows[0].cells:
                 self.set_table_header_bg_color(cell)
-                for paragraph in cell.paragraphs:
+                for ind, paragraph in enumerate(cell.paragraphs):
+                    if ind == 0:
+                        style = paragraph.style
+                    paragraph.style = style
                     for run in paragraph.runs:
                         if run.text in self.mapper:
                             run.text = self.mapper[run.text]
-                            self.set_object_color(run, self.default_color)
+                        self.set_paragraph_font_size(run, 9, bold=False)
+                        self.set_object_color(run, self.default_color)
             if index == 1 and self.input_document_type != 'vul':
                 borders.append('bottom')
             self.set_table_styling(table, *borders)
+
+    def add_cells(self):
+        previous_text = ""
+        current_text = ""
+        previous_paragraph = ""
+        current_paragraph = ""
+        cve = None
+        instance = ""
+
+        for index, table in enumerate(self.tables):
+            for row_index, row in enumerate(table.rows):
+                for cell_index, cell in enumerate(row.cells):
+                    for paragraph in cell.paragraphs:
+                        previous_paragraph = current_paragraph
+                        current_paragraph = paragraph
+                        if not isinstance(previous_paragraph, str) and previous_paragraph.text == 'References':
+                            cve = self.parse_hyperlinks(paragraph)
+                        for run in paragraph.runs:
+                            previous_text = current_text
+                            current_text = run.text
+                            if previous_text == 'Severity':
+                                self.severity_level = current_text
+                            elif previous_text == 'CVSSv2 Score':
+                                self.cvss_v2_score = current_text[:current_text.index(' ')]
+                            elif previous_text == 'References':
+                                self.cve_numbers = cve
+                            elif run.text.startswith('IP Address'):
+                                instance = self.tables[index].rows[1].cells[2].paragraphs[0].text
+                                if instance:
+                                    self.tables[index].rows[1].cells[1].paragraphs[0].text += f'/{instance}'
+                                self.create_new_columns(table)
+                                self.swap_columns_info(table)
+
+        for table in self.tables:
+            if table.rows[0].cells[0].paragraphs[0].runs[0].text == 'IP Address':
+                self.delete_columns(table, [0, 1, 4, 5])
+                table.columns[0].table.table_direction = WD_TABLE_DIRECTION.RTL
+
+    @staticmethod
+    def delete_columns(table, columns):
+        columns.sort(reverse=True)
+        grid = table._tbl.find("w:tblGrid", table._tbl.nsmap)
+        for ci in columns:
+            for cell in table.column_cells(ci):
+                cell._tc.getparent().remove(cell._tc)
+
+            # Delete column reference.
+            col_elem = grid[ci]
+            grid.remove(col_elem)
+
+    @staticmethod
+    def swap_columns_info(table):
+        y = {-1: 0, -2: 1, -3: 4, 2: 5}
+        for index, row in enumerate(table.rows):
+            for i in y:
+                row.cells[i].paragraphs[0].add_run().text = row.cells[y[i]].paragraphs[0].text
+
+    def create_new_columns(self, table):
+        x = ['CVSS Score', 'CVE Number', 'Severity Level', 'Vulnerability', 'Evidence', 'Port',
+             'IP Address']
+        y = {'CVE Number': self.cve_numbers, 'CVSS Score': self.cvss_v2_score,
+             'Severity Level': self.severity_level}
+        if table.rows[0].cells[0].paragraphs[0].runs[0].text.startswith('IP Address'):
+            for i in range(6):
+                table.add_column(Inches(1.0))
+                if i < 3:
+                    self.add_info_into_table(table, x[i], y[x[i]])
+
+    @staticmethod
+    def add_info_into_table(table, header, info=None):
+        table.rows[0].cells[-1].paragraphs[0].add_run().text = header
+        if info:
+            table.rows[1].cells[-1].paragraphs[0].text = info
+
+    @staticmethod
+    def parse_hyperlinks(paragraph):
+        result = ''
+        xml = paragraph.paragraph_format.element.xml
+        xml_str = str(xml)
+        wt_list = re.findall('<w:t>C[\S\s]*?</w:t>', xml_str)
+        if wt_list:
+            wt_list = [item[item.find('>') + 1: item.rfind('<')] for item in wt_list]
+            result = '\n'.join([item for item in wt_list if item.startswith('CVE')])
+        return result
 
     @staticmethod
     def set_table_header_bg_color(cell):
         tc = cell._tc
         tbl_cell_properties = tc.get_or_add_tcPr()
         cl_shading = OxmlElement('w:shd')
-        cl_shading.set(qn('w:fill'), "00000")  # Hex of Dark Blue Shade {R:0x00, G:0x51, B:0x9E}
+        cl_shading.set(qn('w:fill'), "00000")
         tbl_cell_properties.append(cl_shading)
         return cell
 
@@ -167,7 +267,7 @@ class ExecutiveSummary:
         tbl = table._tbl
         cell_number = 0
         coll_count = len(table.columns)
-        x = ['left', 'right', 'top', 'bottom']
+        borders = ['left', 'right', 'top', 'bottom']
         for cell in tbl.iter_tcs():
             tc_pr = cell.tcPr
             tc_borders = OxmlElement("w:tcBorders")
@@ -175,7 +275,7 @@ class ExecutiveSummary:
                 side = OxmlElement(f'w:{border}')
                 side.set(qn("w:val"), "nil")
                 tc_borders.append(side)
-            for i in set(x).difference(args):
+            for i in set(borders).difference(args):
                 side = OxmlElement(f'w:{i}')
                 side.set(qn("w:val"), "single")
                 if cell_number < coll_count:
@@ -190,5 +290,3 @@ class ExecutiveSummary:
 
     def save_document(self):
         self.document.save(f'{self.destination_path}{self.file_name}')
-
-
