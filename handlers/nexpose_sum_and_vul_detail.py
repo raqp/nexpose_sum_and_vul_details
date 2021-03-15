@@ -231,9 +231,9 @@ class ExecutiveSummary:
 
     def create_new_columns(self, table):
         headers = ['CVSS Score', 'CVE Number', 'Severity Level', 'Vulnerability', 'Evidence', 'Port',
-             'IP Address']
+                   'IP Address']
         headers_content = {'CVE Number': self.cve_numbers, 'CVSS Score': self.cvss_v2_score,
-             'Severity Level': self.severity_level}
+                           'Severity Level': self.severity_level}
         if table.rows[0].cells[0].paragraphs[0].runs[0].text.startswith('IP Address'):
             for i in range(6):
                 table.add_column(Inches(1.0))
