@@ -73,12 +73,16 @@ class ExecutiveSummary:
         self.cve_numbers = ''
 
     def start(self):
+        self.set_font_name()
         self.iterate()
         if self.input_document_type == 'vul':
             self.add_cells()
         self.change_tables()
         self.delete_unuseful_tables()
         self.save_document()
+
+    def set_font_name(self):
+        self.document.styles['Normal'].font.name = self.font_name
 
     @staticmethod
     def iter_block_items(parent):
@@ -132,7 +136,6 @@ class ExecutiveSummary:
                             block.text = self.format_paragraph_text(block.text)
                         color = self.default_color
                         font_size = self.p_18_font_size
-
                     elif block.style.font.size == Pt(12):
                         color = self.default_color
                         font_size = self.p_12_font_size
@@ -218,29 +221,31 @@ class ExecutiveSummary:
             col_elem = grid[ci]
             grid.remove(col_elem)
 
-    @staticmethod
-    def swap_columns_info(table):
+    def swap_columns_info(self, table):
         y = {-1: 0, -2: 1, -3: 4, 2: 5}
         for index, row in enumerate(table.rows):
             for i in y:
-                row.cells[i].paragraphs[0].add_run().text = row.cells[y[i]].paragraphs[0].text
+                run = row.cells[i].paragraphs[0].add_run()
+                run.text = row.cells[y[i]].paragraphs[0].text
+                self.set_paragraph_font_size(run, self.table_content_font_size)
 
     def create_new_columns(self, table):
-        x = ['CVSS Score', 'CVE Number', 'Severity Level', 'Vulnerability', 'Evidence', 'Port',
+        headers = ['CVSS Score', 'CVE Number', 'Severity Level', 'Vulnerability', 'Evidence', 'Port',
              'IP Address']
-        y = {'CVE Number': self.cve_numbers, 'CVSS Score': self.cvss_v2_score,
+        headers_content = {'CVE Number': self.cve_numbers, 'CVSS Score': self.cvss_v2_score,
              'Severity Level': self.severity_level}
         if table.rows[0].cells[0].paragraphs[0].runs[0].text.startswith('IP Address'):
             for i in range(6):
                 table.add_column(Inches(1.0))
                 if i < 3:
-                    self.add_info_into_table(table, x[i], y[x[i]])
+                    self.add_info_into_table(table, headers[i], headers_content[headers[i]])
 
-    @staticmethod
-    def add_info_into_table(table, header, info=None):
+    def add_info_into_table(self, table, header, info=None):
         table.rows[0].cells[-1].paragraphs[0].add_run().text = header
         if info:
-            table.rows[1].cells[-1].paragraphs[0].text = info
+            run = table.rows[1].cells[-1].paragraphs[0].add_run()
+            run.text = info
+            self.set_paragraph_font_size(run, self.table_content_font_size)
 
     @staticmethod
     def parse_hyperlinks(paragraph):
