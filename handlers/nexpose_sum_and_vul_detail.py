@@ -47,7 +47,6 @@ class ExecutiveSummary:
                 'Instance': ''
             }
         self.input_document_type = input_document_type
-        # self.document = Document(r'C:\Users\Acer\Desktop\work\nexpose_vulnerability\NExpose\nes.docx')
         self.document = Document(source_file)
         self.destination_path = destination_path
         self.slash = "/"
@@ -81,6 +80,7 @@ class ExecutiveSummary:
         self.delete_unuseful_tables()
         if self.input_document_type == 'vul':
             self.set_table_cell_text()
+            self.check_row_for_remove()
         self.set_all_tables_backgrounds()
         self.save_document()
 
@@ -242,7 +242,22 @@ class ExecutiveSummary:
             col_elem = grid[ci]
             grid.remove(col_elem)
 
-    def change_port_columns_info(self, table):
+    def check_row_for_remove(self):
+        lst = ['Severity', 'CVSSv2 Score', 'Description', 'References']
+        for table in self.tables:
+            if table.rows[0].cells[0].paragraphs[0].text == 'Severity':
+                for row in table.rows:
+                    if row.cells[0].paragraphs[0].text not in lst:
+                        self.remove_row(table, row)
+
+    @staticmethod
+    def remove_row(table, row):
+        tbl = table._tbl
+        tr = row._tr
+        tbl.remove(tr)
+
+    @staticmethod
+    def change_port_columns_info(table):
         for row in table.rows[1:]:
             instance = row.cells[2].paragraphs[0].text
             if instance:
