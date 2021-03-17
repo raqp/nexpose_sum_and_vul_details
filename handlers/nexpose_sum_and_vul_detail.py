@@ -54,7 +54,7 @@ class ExecutiveSummary:
         if os_platform == 'windows':
             self.slash = "\\"
         self.destination = destination_path if destination_path.endswith(self.slash) else destination_path + self.slash
-        self.file_name = f'report_{datetime.now().strftime("%d-%b-%Y-%H-%M")}.docx'
+        self.file_name = f'report_{datetime.now().strftime("%d-%b-%Y-%H-%M-%S")}.docx'
         self.paragraphs = self.document.paragraphs
         self.tables = self.document.tables
         self.font_name = config['font_name']
@@ -202,7 +202,6 @@ class ExecutiveSummary:
         previous_paragraph = ""
         current_paragraph = ""
         cve = None
-        instance = ""
 
         for index, table in enumerate(self.tables):
             for row_index, row in enumerate(table.rows):
@@ -222,9 +221,7 @@ class ExecutiveSummary:
                             elif previous_text == 'References':
                                 self.cve_numbers = cve if cve else 'N/A'
                             elif run.text.startswith('IP Address'):
-                                instance = self.tables[index].rows[1].cells[2].paragraphs[0].text
-                                if instance:
-                                    self.tables[index].rows[1].cells[1].paragraphs[0].text += f'/{instance}'
+                                self.change_port_columns_info(table)
                                 self.create_new_columns(table)
                                 self.swap_columns_info(table)
 
@@ -244,6 +241,12 @@ class ExecutiveSummary:
             # Delete column reference.
             col_elem = grid[ci]
             grid.remove(col_elem)
+
+    def change_port_columns_info(self, table):
+        for row in table.rows[1:]:
+            instance = row.cells[2].paragraphs[0].text
+            if instance:
+                row.cells[1].paragraphs[0].runs[0].text += f'/{instance}'
 
     def swap_columns_info(self, table):
         y = {-1: 0, -2: 1, -3: 4, 2: 5}
